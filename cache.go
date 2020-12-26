@@ -77,26 +77,26 @@ func (valueTimestamp *ValueTimestampPair) updateTimestamp(time time.Time) {
 	valueTimestamp.timestamp.timestamp = time
 }
 
+// Receives a reference to a cache and an item code.
+// Updates the value stored in the cache for this item and its associated timestamp.
+// Returns the new cached value for the item. If an error occurs, then the error is returned instead.
 func (valueTimestamp *ValueTimestampPair) updateAndGetValue(c *TransparentCache, itemCode string) (float64, error){
 	valueTimestamp.lock.Lock()
 	defer valueTimestamp.lock.Unlock()
-	//fmt.Printf("ENTER MISS: key: %s \n", itemCode)
-
 
 	if time.Now().Sub(valueTimestamp.getTimestamp()) < c.maxAge {
-		//fmt.Printf("MISS BUT THEN HIT: key: %s\n", itemCode)
-
 		return valueTimestamp.value, nil
 	}
 
 	newValue, err := c.actualPriceService.GetPriceFor(itemCode)
 	valueTimestamp.value = newValue
 	valueTimestamp.updateTimestamp(time.Now())
-	//fmt.Printf("MISS: key: %s\n", itemCode)
 
 	return newValue, err
 }
 
+// Receives an expected maximum age. If the age associated to the ValueTimestampPair does not exceed
+// the maximum age, then the value is returned. Otherwise a value of 0 is returned together with an error.
 func (valueTimestamp *ValueTimestampPair) getValueIfTimestampNotExpired(maxAge time.Duration) (float64, error) {
 	valueTimestamp.lock.RLock()
 	defer valueTimestamp.lock.RUnlock()
@@ -125,6 +125,9 @@ func (c *TransparentCache) GetPriceFor(itemCode string) (float64, error) {
 	return c.getPriceFor(itemCode)
 }
 
+// Receives an item and a channel. Attempts to retrieve the item's price from the cache and send a Message containing
+// the retrieved value through the channel. If an error occurred while fetching the item's price, the Message will contain
+// the error instead. 
 func (c *TransparentCache) GetPriceForItemAndSendThroughChannel(itemCode string, resultChannel chan Message) {
 	result, err := c.GetPriceFor(itemCode)
 	resultChannel <- Message {
