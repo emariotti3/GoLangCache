@@ -97,24 +97,27 @@ func (valueTimestamp *ValueTimestampPair) updateAndGetValue(c *TransparentCache,
 	return newValue, err
 }
 
-//func (valueTimestamp *ValueTimestampPair) getValueIfTimestampNotExpired (float64, error) {
+func (valueTimestamp *ValueTimestampPair) getValueIfTimestampNotExpired(maxAge time.Duration) (float64, error) {
+	valueTimestamp.lock.RLock()
+	defer valueTimestamp.lock.RUnlock()
 
-//}
+	// Check that the price was retrieved less than "maxAge" ago!
+	if time.Now().Sub(valueTimestamp.getTimestamp()) < maxAge {
+		//The price is still valid, so we return the cached value
+		return valueTimestamp.value, nil
+	}
+
+	return 0, fmt.Errorf("Attempted to obtain an expired value from cache")
+}
 
 // GetPriceFor gets the price for the item, either from the cache or the actual service if it was not cached or too old
 func (c *TransparentCache) GetPriceFor(itemCode string) (float64, error) {
 	price, ok := c.prices[itemCode]
 	if ok {
-		price.lock.RLock()
-		priceValue := price.value
-
-		// Check that the price was retrieved less than "maxAge" ago!
-		if time.Now().Sub(price.getTimestamp()) < c.maxAge {
-			defer price.lock.RUnlock()
-			//The price is still valid, so we return the cached value
+		priceValue, err := price.getValueIfTimestampNotExpired(c.maxAge)
+		if err == nil {
 			return priceValue, nil
 		}
-		price.lock.RUnlock()
 		//We need to refresh this price in the cache
 		return price.updateAndGetValue(c, itemCode)
 	}
