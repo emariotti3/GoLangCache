@@ -36,3 +36,11 @@ We suggest not to spend more than 2 hours total, which can be done over the cour
 What we want to see is how well you handle yourself given the time you spend on the problem, how you think, and how you prioritize when time is insufficient to solve everything.
 
 Please email your solution as soon as you have completed the challenge or the time is up.
+
+## About This Solution
+
+To make this cache safe to read and write in the desired context, the following decisions were made:
+    * The cache contains a read-write lock, which was introduced to ensure that cached values can be read and initialized safely. 
+    * Each key-value pair has an associated read-write lock to ensure that when a timestamp needs to be updated, this will also be thread safe. This decision was taken in order to allow paralell writes to already initialized values in the cache and improve performance.
+
+Every fetch to the cache will be executed in a separate go-routine. Each routine will communicate the obtained result to the main thread through a separate channel.

@@ -155,7 +155,7 @@ func (c *TransparentCache) GetPriceFor(itemCode string) (float64, error) {
 // Receives an item and a channel. Attempts to retrieve the item's price from the cache and send a Message containing
 // the retrieved value through the channel. If an error occurred while fetching the item's price, the Message will contain
 // the error instead. 
-func (c *TransparentCache) getPriceForItemAndSendThroughChannel(itemCode string, resultChannel chan Message) {
+func (c *TransparentCache) getPriceForItemThroughChannel(itemCode string, resultChannel chan Message) {
 	result, err := c.GetPriceFor(itemCode)
 	resultChannel <- Message {
 		value:	result, 
@@ -171,7 +171,7 @@ func (c *TransparentCache) GetPricesFor(itemCodes ...string) ([]float64, error) 
 
 	for _, itemCode := range itemCodes {
 		var channel = make(chan Message)
-		go c.getPriceForItemAndSendThroughChannel(itemCode, channel)
+		go c.getPriceForItemThroughChannel(itemCode, channel)
 		channels = append(channels, channel)
 	}
 
