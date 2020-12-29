@@ -78,6 +78,19 @@ func assertFloats(t *testing.T, expected []float64, actual []float64, msg string
 	}
 }
 
+func assertFloatsInOrder(t *testing.T, expected []float64, actual []float64, msg string) {
+	if len(expected) != len(actual) {
+		t.Error(msg, fmt.Sprintf("expected : %v, got : %v", expected, actual))
+		return
+	}
+	for i, expectedValue := range expected {
+		if expectedValue != actual[i] {
+			t.Error(msg, fmt.Sprintf("expected : %v, got : %v", expected, actual))
+			return
+		}
+	}
+}
+
 // Check that we are caching results (we should not call the external service for all calls)
 func TestGetPriceFor_CachesResults(t *testing.T) {
 	mockService := &mockPriceService{
@@ -169,4 +182,24 @@ func TestGetPricesFor_ParallelizeCalls(t *testing.T) {
 	if elapsedTime > (1200 * time.Millisecond) {
 		t.Error("calls took too long, expected them to take a bit over one second")
 	}
+}
+
+func TestGetPricesFor_ReturnsOrderedResults(t *testing.T){
+	mockService := &mockPriceService{
+		callDelay: time.Second, 
+		mockResults: map[string]mockResult{
+			"p1": {price: 1, err: nil},
+			"p2": {price: 2, err: nil},
+			"p3": {price: 3, err: nil},
+			"p4": {price: 4, err: nil},
+			"p5": {price: 5, err: nil},
+			"p6": {price: 6, err: nil},
+			"p7": {price: 7, err: nil},
+			"p8": {price: 8, err: nil},
+			"p9": {price: 9, err: nil},
+			"p10": {price: 10, err: nil},
+		},
+	}
+	cache := NewTransparentCache(mockService, time.Minute)
+	assertFloatsInOrder(t, []float64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, getPricesWithNoErr(t, cache, "p1", "p2", "p3", "p4", "p5", "p6", "p7", "p8", "p9", "p10"), "wrong price returned")
 }
