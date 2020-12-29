@@ -203,3 +203,16 @@ func TestGetPricesFor_ReturnsOrderedResults(t *testing.T){
 	cache := NewTransparentCache(mockService, time.Minute)
 	assertFloatsInOrder(t, []float64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, getPricesWithNoErr(t, cache, "p1", "p2", "p3", "p4", "p5", "p6", "p7", "p8", "p9", "p10"), "wrong price returned")
 }
+
+func TestGetPricesFor_CheckCacheInitializedOnce(t *testing.T) {
+	mockService := &mockPriceService{
+		mockResults: map[string]mockResult{
+			"p1": {price: 5, err: nil},
+		},
+	}
+	cache := NewTransparentCache(mockService, time.Minute)
+	assertFloat(t, 5, getPriceWithNoErr(t, cache, "p1"), "wrong price returned")
+
+	assertFloats(t, []float64{5, 5, 5, 5, 5, 5, 5, 5, 5, 5}, getPricesWithNoErr(t, cache, "p1", "p1", "p1", "p1", "p1", "p1", "p1", "p1", "p1", "p1"), "wrong price returned")
+	assertInt(t, 1, mockService.getNumCalls(), "wrong number of service calls")
+}

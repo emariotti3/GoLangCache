@@ -24,7 +24,7 @@ type TransparentCache struct {
 	actualPriceService PriceService
 	maxAge             time.Duration
 	prices             map[string]ValueTimestampPair
-	lock			   sync.Mutex
+	lock			   sync.RWMutex
 }
 
 func NewTransparentCache(actualPriceService PriceService, maxAge time.Duration) *TransparentCache {
@@ -32,23 +32,44 @@ func NewTransparentCache(actualPriceService PriceService, maxAge time.Duration) 
 		actualPriceService: actualPriceService,
 		maxAge:             maxAge,
 		prices:             map[string]ValueTimestampPair{},
-		lock:				sync.Mutex{},
+		lock:				sync.RWMutex{},
 	}
 }
 
-func (c *TransparentCache) getPriceFor(itemCode string) (float64, error) {
+func (c *TransparentCache) doGetPriceFor(itemCode string) (ValueTimestampPair, bool) {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	value, ok := c.prices[itemCode]
+	return value, ok
+}
+
+func (c *TransparentCache) newPriceFor(itemCode string, itemPrice float64) (ValueTimestampPair) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	value, ok := c.prices[itemCode]
+
+	if ok {
+		return value
+	}
+
+	c.prices[itemCode] = NewValueTimestampPair(itemPrice, time.Now())
+	return c.prices[itemCode]
+}
+
+func (c *TransparentCache) getPriceFor(itemCode string) (ValueTimestampPair, error) {
+	value, ok := c.doGetPriceFor(itemCode)
+
+	if ok {
+		return value, nil
+	}
+
 	priceValue, err := c.actualPriceService.GetPriceFor(itemCode)
 	if err != nil {
-		return 0, fmt.Errorf("getting price from service : %v", err.Error())
+		return NewValueTimestampPair(0, time.Now()), fmt.Errorf("getting price from service : %v", err.Error())
 	}
-	c.lock.Lock()
-	_, ok := c.prices[itemCode]
-	if !ok {
-		c.prices[itemCode] = NewValueTimestampPair(priceValue, time.Now())
-	}
-	c.lock.Unlock()
 
-	return priceValue, nil
+	return c.newPriceFor(itemCode, priceValue), nil
 }
 
 type Timestamp struct {
@@ -112,8 +133,8 @@ func (valueTimestamp *ValueTimestampPair) getValueIfTimestampNotExpired(maxAge t
 
 // GetPriceFor gets the price for the item, either from the cache or the actual service if it was not cached or too old
 func (c *TransparentCache) GetPriceFor(itemCode string) (float64, error) {
-	price, ok := c.prices[itemCode]
-	if ok {
+	price, err := c.getPriceFor(itemCode)
+	if err == nil {
 		priceValue, err := price.getValueIfTimestampNotExpired(c.maxAge)
 		if err == nil {
 			return priceValue, nil
@@ -121,8 +142,7 @@ func (c *TransparentCache) GetPriceFor(itemCode string) (float64, error) {
 		//We need to refresh this price in the cache
 		return price.updateAndGetValue(c, itemCode)
 	}
-	//The item was never loaded to the cache
-	return c.getPriceFor(itemCode)
+	return 0, err
 }
 
 // Receives an item and a channel. Attempts to retrieve the item's price from the cache and send a Message containing
