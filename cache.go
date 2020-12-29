@@ -128,7 +128,7 @@ func (c *TransparentCache) GetPriceFor(itemCode string) (float64, error) {
 // Receives an item and a channel. Attempts to retrieve the item's price from the cache and send a Message containing
 // the retrieved value through the channel. If an error occurred while fetching the item's price, the Message will contain
 // the error instead. 
-func (c *TransparentCache) GetPriceForItemAndSendThroughChannel(itemCode string, resultChannel chan Message) {
+func (c *TransparentCache) getPriceForItemAndSendThroughChannel(itemCode string, resultChannel chan Message) {
 	result, err := c.GetPriceFor(itemCode)
 	resultChannel <- Message {
 		value:	result, 
@@ -143,28 +143,16 @@ func (c *TransparentCache) GetPricesFor(itemCodes ...string) ([]float64, error) 
 	channels := []chan Message{}
 
 	for _, itemCode := range itemCodes {
-		//fmt.Printf("Process item %s\n", itemCode)
 		var channel = make(chan Message)
-		go c.GetPriceForItemAndSendThroughChannel(itemCode, channel)
+		go c.getPriceForItemAndSendThroughChannel(itemCode, channel)
 		channels = append(channels, channel)
 	}
 
-	//results := []float64{}
-	//channel := make(chan Message)
-
 	results := make([]float64, len(itemCodes))
-	
-	// Initialize select cases.
-	//cases := make([]reflect.SelectCase, len(channels))
 
-	//for i, ch := range channels {
-	//	cases[i] = reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(ch)}
-	//}
-
+	// Iterate through channels to retrieve results in order
 	for i, _ := range itemCodes {
 		message, ok := <- channels[i]
-		//var msg = reflect.ValueOf(message)
-		//var messageValue = msg.Interface().(Message)
 		if !ok {
 			return []float64{}, message.err
 		}
