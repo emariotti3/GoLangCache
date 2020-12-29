@@ -43,6 +43,10 @@ func (c *TransparentCache) doGetPriceFor(itemCode string) (ValueTimestampPair, b
 	return value, ok
 }
 
+// Receives an itemCode and an itemPrice. 
+// Creates a new entry in the cache, where the itemCode will be set as the access key
+// and the itemPrice will be used as the associated cached value.
+// Returns the newly cached item.
 func (c *TransparentCache) newPriceFor(itemCode string, itemPrice float64) (ValueTimestampPair) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
@@ -57,6 +61,9 @@ func (c *TransparentCache) newPriceFor(itemCode string, itemPrice float64) (Valu
 	return c.prices[itemCode]
 }
 
+// Receives an itemCode. If the item has never been fetched before, 
+// the item will be fetched from the servece and initialized in the cache. 
+// The current cached item will be returned.
 func (c *TransparentCache) getPriceFor(itemCode string) (ValueTimestampPair, error) {
 	value, ok := c.doGetPriceFor(itemCode)
 
@@ -94,7 +101,7 @@ func (valueTimestamp *ValueTimestampPair) getTimestamp() (time.Time) {
 	return valueTimestamp.timestamp.timestamp
 }
 
-func (valueTimestamp *ValueTimestampPair) updateTimestamp(time time.Time) {
+func (valueTimestamp *ValueTimestampPair) setTimestamp(time time.Time) {
 	valueTimestamp.timestamp.timestamp = time
 }
 
@@ -111,13 +118,13 @@ func (valueTimestamp *ValueTimestampPair) updateAndGetValue(c *TransparentCache,
 
 	newValue, err := c.actualPriceService.GetPriceFor(itemCode)
 	valueTimestamp.value = newValue
-	valueTimestamp.updateTimestamp(time.Now())
+	valueTimestamp.setTimestamp(time.Now())
 
 	return newValue, err
 }
 
-// Receives an expected maximum age. If the age associated to the ValueTimestampPair does not exceed
-// the maximum age, then the value is returned. Otherwise a value of 0 is returned together with an error.
+// Receives an expected maximum age. If the age associated to the cached value does not exceed
+// the maximum age, then said value is returned. Otherwise, 0 is returned together with an error.
 func (valueTimestamp *ValueTimestampPair) getValueIfTimestampNotExpired(maxAge time.Duration) (float64, error) {
 	valueTimestamp.lock.RLock()
 	defer valueTimestamp.lock.RUnlock()
