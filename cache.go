@@ -134,26 +134,41 @@ func (c *TransparentCache) GetPriceForItemAndSendThroughChannel(itemCode string,
 		value:	result, 
 		err: 	err,
 	}
+	close(resultChannel)
 }
 
 // GetPricesFor gets the prices for several items at once, some might be found in the cache, others might not
 // If any of the operations returns an error, it should return an error as well
 func (c *TransparentCache) GetPricesFor(itemCodes ...string) ([]float64, error) {
-	results := []float64{}
-	channel := make(chan Message)
+	channels := []chan Message{}
+
 	for _, itemCode := range itemCodes {
 		//fmt.Printf("Process item %s\n", itemCode)
+		var channel = make(chan Message)
 		go c.GetPriceForItemAndSendThroughChannel(itemCode, channel)
+		channels = append(channels, channel)
 	}
-	for range itemCodes {
-		message, ok := <-channel
-		if message.err != nil {
+
+	//results := []float64{}
+	//channel := make(chan Message)
+
+	results := make([]float64, len(itemCodes))
+	
+	// Initialize select cases.
+	//cases := make([]reflect.SelectCase, len(channels))
+
+	//for i, ch := range channels {
+	//	cases[i] = reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(ch)}
+	//}
+
+	for i, _ := range itemCodes {
+		message, ok := <- channels[i]
+		//var msg = reflect.ValueOf(message)
+		//var messageValue = msg.Interface().(Message)
+		if !ok {
 			return []float64{}, message.err
 		}
-		if ok {
-			//fmt.Printf("Append result for item %s\n", itemCode)
-			results = append(results, message.value)
-		}
+		results[i] = message.value
 	}
 	return results, nil
 }
