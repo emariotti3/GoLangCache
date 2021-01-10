@@ -7,6 +7,7 @@ import (
 )
 
 type Message struct {
+	index int
 	value float64
 	err error
 }
@@ -155,35 +156,44 @@ func (c *TransparentCache) GetPriceFor(itemCode string) (float64, error) {
 // Receives an item and a channel. Attempts to retrieve the item's price from the cache and send a Message containing
 // the retrieved value through the channel. If an error occurred while fetching the item's price, the Message will contain
 // the error instead. 
-func (c *TransparentCache) getPriceForItemThroughChannel(itemCode string, resultChannel chan Message) {
+func (c *TransparentCache) getPriceForItemThroughChannel(index int, itemCode string, resultChannel *chan Message, wg *sync.WaitGroup) {
+	defer wg.Done()
+
 	result, err := c.GetPriceFor(itemCode)
-	resultChannel <- Message {
+	*resultChannel <- Message {
+		index: index,
 		value:	result, 
 		err: 	err,
 	}
-	close(resultChannel)
+}
+
+func closeChannelWhenDone(channel *chan Message, wg *sync.WaitGroup) {
+	wg.Wait()
+	close(*channel)
 }
 
 // GetPricesFor gets the prices for several items at once, some might be found in the cache, others might not
 // If any of the operations returns an error, it should return an error as well
 func (c *TransparentCache) GetPricesFor(itemCodes ...string) ([]float64, error) {
-	channels := []chan Message{}
+	var wg sync.WaitGroup
+	var channel = make(chan Message)
 
-	for _, itemCode := range itemCodes {
-		var channel = make(chan Message)
-		go c.getPriceForItemThroughChannel(itemCode, channel)
-		channels = append(channels, channel)
+	for index, itemCode := range itemCodes {
+		go c.getPriceForItemThroughChannel(index, itemCode, &channel, &wg)
+		wg.Add(1)
 	}
+
+	go closeChannelWhenDone(&channel, &wg)
 
 	results := make([]float64, len(itemCodes))
 
 	// Iterate through channels to retrieve results in order
-	for i, _ := range itemCodes {
-		message, ok := <- channels[i]
+	for range itemCodes {
+		message, ok := <- channel
 		if !ok {
 			return []float64{}, message.err
 		}
-		results[i] = message.value
+		results[message.index] = message.value
 	}
 	return results, nil
 }
